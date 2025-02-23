@@ -1,9 +1,9 @@
-import * as R from './refs';
-import * as PIXI from 'pixi.js';
+import { reactive, computed, tick, always } from '../streamstate';
+import * as PIXI from 'https://cdn.jsdelivr.net/npm/pixi.js@8.8.0/dist/pixi.mjs';
 import {Body, Bodies, Composite, Engine} from 'matter-js';
 
 // Server. Communicate by methods only to sim server
-class GameState {
+class GameServer {
   constructor() {
     this.marblePositions = [[100, 100]];
     this.engine = Engine.create();
@@ -23,92 +23,6 @@ class GameState {
     return trajectories;
   }
 }
-
-function doMarble(ctx, {pos}) {
-  const circle = new PIXI.Graphics()
-    .circle(0, 0, 20)
-    .fill('red');
-  R.always(() => {
-    circle.position.x = pos.v[0];
-    circle.position.y = pos.v[1];
-  });
-  ctx.app.stage.addChild(circle);
-}
-
-const ctx = {};
-
-ctx.gameState = new GameState();
-
-const app = new PIXI.Application();
-await app.init({ width: 1280, height: 720 });
-ctx.app = app;
-window.app = app;
-
-const time = R.ref(0.0);
-app.ticker.add((ticker) => {
-  time.set(time.v + ticker.elapsedMS);
-  R.tick();
-});
-ctx.time = time;
-
-const keyDown = R.ref(null);
-window.addEventListener('keydown', (e) => {
-  if (e.key === ' ') {
-    e.preventDefault();
-  }
-  keyDown.set(e);
-  R.tick();
-});
-ctx.keyDown = keyDown;
-
-
-const velocity = [{x:5, y:0}];
-
-const animation = R.reducer({}, [
-  ctx.keyDown, () => {
-    if (ctx.keyDown.v.key !== ' ') {
-      return;
-    }
-    const trajs = ctx.gameState.submitVelocities(velocity);
-    return {
-      trajectory: trajs[0],
-      start: ctx.time.v,
-    };
-  },
-]);
-
-const ballPos = R.computed(() => {
-  if (!animation.v.trajectory) return R.cold;
-  return positionOnTrajectory(animation.v.trajectory, ctx.time.v - animation.v.start)
-}, {initial: [100, 100]});
-
-const circle = new PIXI.Graphics()
-  .circle(0, 0, 20)
-  .fill('red');
-R.always(() => {
-  circle.position.x = ballPos.v[0];
-  circle.position.y = ballPos.v[1];
-});
-ctx.app.stage.addChild(circle);
-
-const isAiming = R.reducer(false, [
-  ctx.leftClick, () => {
-    if (!ctx.leftClick.v) return false;
-    return distanceBetweenSq(ctx.mousePos.v, ballPos.v) < 400;
-  }
-]);
-
-const aimLine = PIXI.Graphics();
-always(() => {
-  if (!isAiming.v) return;
-  aimLine
-    .clear()
-    .moveTo(...ballPos.v)
-    .lineTo(...ctx.mousePos.v)
-    .stroke({width: 5, color: 'green'});
-});
-
-document.body.appendChild(app.canvas);
 
 function areAnyMoving(bodies) {
   return bodies.some((body) => body.speed > 0.1);
@@ -131,6 +45,62 @@ function calculateTrajectories(engine, bodies) {
   return trajectories;
 }
 
+async function setupGame() {
+  const server = new GameServer();
+
+  const time = reactive(0.0);
+  const animation = reactive();
+
+  const ballPos = computed(() => animation.v ? positionOnTrajectory(animation.v.trajectory, time.v - animation.v.start) : [100, 100]);
+
+  // const aimLine = PIXI.Graphics();
+  // always(() => {
+  //   if (!isAiming.v) return;
+  //   aimLine
+  //     .clear()
+  //     .moveTo(...ballPos.v)
+  //     .lineTo(...ctx.mousePos.v)
+  //     .stroke({width: 5, color: 'green'});
+  // });
+
+  const app = new PIXI.Application();
+  await app.init({ width: 1280, height: 720 });
+
+  app.ticker.add((ticker) => {
+    time.set(time.v + ticker.elapsedMS);
+    tick();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' ') {
+      e.preventDefault();
+      const trajs = server.submitVelocities([{x:5, y:0}]);
+      animation.set({
+        trajectory: trajs[0],
+        start: time.v,
+      });
+    }
+    tick();
+  });
+
+  app.canvas.addEventListener('mousedown', (e) => {
+    const x = e.offsetX;
+    const y = e.offsetY;
+    console.log(x, y);
+  });
+
+  const circle = new PIXI.Graphics()
+    .circle(0, 0, 20)
+    .fill('red');
+  always(() => {
+    circle.position.x = ballPos.v[0];
+    circle.position.y = ballPos.v[1];
+  });
+  app.stage.addChild(circle);
+
+  document.body.appendChild(app.canvas);
+}
+
 function positionOnTrajectory(trajectory, time) {
   if (time <= trajectory[0][0]) {
     return trajectory[0].slice(1);
@@ -149,6 +119,4 @@ function positionOnTrajectory(trajectory, time) {
   ];
 }
 
-function distanceBetweenSq(u, v) {
-  return (u[0] - v[0]) ** 2 + (u[1] - v[1]) ** 2;
-}
+setupGame();
