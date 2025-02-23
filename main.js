@@ -54,8 +54,9 @@ async function setupGame() {
   const dragging = reactive(false);
   const aim = reactive(vec.fromValues(0, 0));
 
-  const aiming = computed(() => !animation.v && dragging.v);
   const ballPos = computed(() => animation.v ? positionOnTrajectory(animation.v.trajectory, time.v - animation.v.start) : [100, 100]);
+  const animating = computed(() => animation.v && time.v - animation.v.start <= animation.v.trajectory[animation.v.trajectory.length - 1][0]);
+  const aiming = computed(() => !animating.v && dragging.v);
 
   const app = new PIXI.Application();
   await app.init({ width: 1280, height: 720 });
