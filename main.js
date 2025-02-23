@@ -37,10 +37,10 @@ function calculateTrajectories(engine, bodies) {
   const interval = 1/10 * 1000;
   let time = 0.0;
   while (areAnyMoving(bodies)) {
-    Engine.update(engine, interval);
     bodies.forEach((body, i) => {
       trajectories[i].push([time, body.position.x, body.position.y]);
     });
+    Engine.update(engine, interval);
     time += interval;
   }
   return trajectories;
