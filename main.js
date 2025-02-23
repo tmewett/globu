@@ -1,5 +1,6 @@
 import { reactive, computed, tick, always } from '../streamstate';
 import * as PIXI from 'https://cdn.jsdelivr.net/npm/pixi.js@8.8.0/dist/pixi.mjs';
+import * as vec from 'gl-matrix/vec2'
 import {Body, Bodies, Composite, Engine} from 'matter-js';
 
 // Server. Communicate by methods only to sim server
@@ -50,18 +51,11 @@ async function setupGame() {
 
   const time = reactive(0.0);
   const animation = reactive();
+  const dragging = reactive(false);
+  const aim = reactive(vec.fromValues(0, 0));
 
+  const aiming = computed(() => !animation.v && dragging.v);
   const ballPos = computed(() => animation.v ? positionOnTrajectory(animation.v.trajectory, time.v - animation.v.start) : [100, 100]);
-
-  // const aimLine = PIXI.Graphics();
-  // always(() => {
-  //   if (!isAiming.v) return;
-  //   aimLine
-  //     .clear()
-  //     .moveTo(...ballPos.v)
-  //     .lineTo(...ctx.mousePos.v)
-  //     .stroke({width: 5, color: 'green'});
-  // });
 
   const app = new PIXI.Application();
   await app.init({ width: 1280, height: 720 });
@@ -74,19 +68,33 @@ async function setupGame() {
   window.addEventListener('keydown', (e) => {
     if (e.key === ' ') {
       e.preventDefault();
-      const trajs = server.submitVelocities([{x:5, y:0}]);
+      const trajs = server.submitVelocities([{ x: aim.v[0], y: aim.v[1] }]);
       animation.set({
         trajectory: trajs[0],
         start: time.v,
       });
+      aim.set(vec.fromValues(0, 0));
     }
     tick();
   });
 
   app.canvas.addEventListener('mousedown', (e) => {
-    const x = e.offsetX;
-    const y = e.offsetY;
-    console.log(x, y);
+    const m = vec.fromValues(e.offsetX, e.offsetY);
+    if (vec.distance(m, ballPos.v) < 50) {
+      dragging.set(true);
+    }
+  });
+
+  app.canvas.addEventListener('mouseup', (e) => {
+    dragging.set(false);
+  });
+
+  app.canvas.addEventListener('mousemove', (e) => {
+    const m = vec.fromValues(e.offsetX, e.offsetY);
+    if (aiming.v) {
+      vec.sub(m, m, ballPos.v);
+      aim.set(m);
+    }
   });
 
   const circle = new PIXI.Graphics()
@@ -97,6 +105,22 @@ async function setupGame() {
     circle.position.y = ballPos.v[1];
   });
   app.stage.addChild(circle);
+
+  const aimLine = new PIXI.Graphics();
+  always(() => {
+    if (vec.length(aim.v) === 0) {
+      aimLine.clear();
+      return;
+    }
+    const aimA = vec.create();
+    vec.add(aimA, aim.v, ballPos.v);
+    aimLine
+      .clear()
+      .moveTo(...ballPos.v)
+      .lineTo(...aimA)
+      .stroke({width: 5, color: 'green'});
+  });
+  app.stage.addChild(aimLine);
 
   document.body.appendChild(app.canvas);
 }
