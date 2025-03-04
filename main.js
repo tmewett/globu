@@ -11,16 +11,16 @@ class GameServer {
     this.engine.gravity.scale = 0;
     this.marbleBodies = this.marblePositions.map((pos) => {
       const body = Bodies.circle(...pos, 20);
+      body.frictionAir = 0.02;
       Composite.add(this.engine.world, [body]);
       return body;
-    })
+    });
   }
   submitVelocities(vels) {
     vels.forEach((vel, i) => {
       Body.setVelocity(this.marbleBodies[i], vel);
     });
     const trajectories = calculateTrajectories(this.engine, this.marbleBodies);
-    this.marblePositions = trajectories.map((tr) => tr[tr.length - 1]);
     return trajectories;
   }
 }
