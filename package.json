@@ -1,7 +1,9 @@
 {
   "dependencies": {
-    "gl-matrix": "^3.4.3",
-    "matter-js": "^0.20.0",
+    "gl-matrix": "beta",
+    "matter-js": "^0.20.0"
+  },
+  "devDependencies": {
     "vite": "^6.1.1"
   }
 }
