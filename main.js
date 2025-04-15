@@ -1,16 +1,15 @@
-import { System, ValueInput, computed, subscribe } from '../streamstate';
 import * as PIXI from 'https://cdn.jsdelivr.net/npm/pixi.js@8.8.0/dist/pixi.mjs';
-import * as vec from 'gl-matrix/vec2'
+import {Vec2} from 'gl-matrix/vec2'
 import {Body, Bodies, Composite, Engine} from 'matter-js';
 
 // Server. Communicate by methods only to sim server
 class GameServer {
   constructor() {
-    this.marblePositions = [[100, 100]];
+    this.marblePositions = [new Vec2(100, 100)];
     this.engine = Engine.create();
     this.engine.gravity.scale = 0;
     this.marbleBodies = this.marblePositions.map((pos) => {
-      const body = Bodies.circle(...pos, 20);
+      const body = Bodies.circle(pos.x, pos.y, 20);
       body.frictionAir = 0.02;
       Composite.add(this.engine.world, [body]);
       return body;
@@ -48,40 +47,80 @@ function calculateTrajectories(engine, bodies) {
 
 async function setupGame() {
   const server = new GameServer();
-
   const app = new PIXI.Application();
   await app.init({ width: 1280, height: 720 });
 
-  let timeV = 0;
-  let timeI;
-  const s = new System(() => {
-    timeI = new ValueInput(timeV);
-    const time = timeI.reactive;
+  let marbleData = [];
+  for (const [i, pos] of server.marblePositions.entries()) {
+    const circle = new PIXI.Graphics()
+      .circle(pos.x, pos.y, 20)
+      .fill('red');
+    app.stage.addChild(circle);
 
-    const ballPos = computed(v => [[0, {x: 100 + Math.sin(v(time) / 100) * 100, y: 50}]]);
+    const data = {
+      aimLine: new PIXI.Graphics(),
+    };
+    app.stage.addChild(data.aimLine);
+    marbleData.push(data);
+  }
 
-    const circles = new Map();
-    subscribe(ballPos, (v) => {
-      for (const [i, pos] of v(ballPos)) {
-        if (!circles.has(i)) {
-          const circle = new PIXI.Graphics()
-            .circle(pos.x, pos.y, 20)
-            .fill('red');
-          app.stage.addChild(circle);
-          circles.set(i, circle);
-        } else {
-          const circle = circles.get(i);
-          circle.position.x = pos.x;
-          circle.position.y = pos.y;
-        }
+  let mousePos;
+  let dragging;
+
+  let t = 0;
+  function process(eType) {
+    let hovering = server.marblePositions.findIndex(pos => Vec2.clone(mousePos).dist(pos) < 20);
+    if (hovering === -1) {
+      hovering = undefined;
+    }
+    let newAimLine = false;
+    if (eType === 'mousedown') {
+      if (hovering !== undefined) {
+        dragging = hovering;
       }
-    });
+    } else if (eType === 'mouseup') {
+      dragging = undefined;
+    } else if (eType === 'mousemove') {
+      if (dragging !== undefined) {
+        const start = server.marblePositions[dragging];
+        const end = mousePos;
+        marbleData[dragging].aimLine
+          .clear()
+          .moveTo(start.x, start.y)
+          .lineTo(end.x, end.y)
+          .stroke({width: 5, color: 'green'});
+      }
+    }
+
+    for (const [id, m] of marbleData.entries()) {
+    }
+
+    if (hovering !== undefined || dragging !== undefined) {
+      app.canvas.style.cursor = 'pointer';
+    } else {
+      app.canvas.style.cursor = 'default';
+    }
+
+    t++;
+  }
+
+  app.canvas.addEventListener('mouseup', (e) => {
+    const pos = new Vec2(e.offsetX, e.offsetY);
+    mousePos = pos;
+    process('mouseup');
+  });
+  app.canvas.addEventListener('mousedown', (e) => {
+    const pos = new Vec2(e.offsetX, e.offsetY);
+    mousePos = pos;
+    process('mousedown');
+  });
+  app.canvas.addEventListener('mousemove', (e) => {
+    const pos = new Vec2(e.offsetX, e.offsetY);
+    mousePos = pos;
+    process('mousemove');
   });
 
   app.ticker.add((ticker) => {
-    timeV += ticker.elapsedMS;
-    timeI.set(timeV);
-    s.tick();
   });
 
   document.body.appendChild(app.canvas);
