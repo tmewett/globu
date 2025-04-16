@@ -5,7 +5,7 @@ import {Body, Bodies, Composite, Engine} from 'matter-js';
 // Server. Communicate by methods only to sim server
 class GameServer {
   constructor() {
-    this.marblePositions = [new Vec2(100, 100)];
+    this.marblePositions = [new Vec2(100, 100), new Vec2(100, 200)];
     this.engine = Engine.create();
     this.engine.gravity.scale = 0;
     this.marbleBodies = this.marblePositions.map((pos) => {
@@ -19,30 +19,25 @@ class GameServer {
     vels.forEach((vel, i) => {
       Body.setVelocity(this.marbleBodies[i], vel);
     });
-    const trajectories = calculateTrajectories(this.engine, this.marbleBodies);
-    return trajectories;
+    const trajectories = [];
+    for (let i=0; i < this.marbleBodies.length; i++) {
+      trajectories[i] = [];
+    }
+    const interval = 1/10 * 1000;
+    let time = 0.0;
+    while (areAnyMoving(this.marbleBodies)) {
+      this.marbleBodies.forEach((body, i) => {
+        trajectories[i].push([time, body.position.x, body.position.y]);
+      });
+      Engine.update(this.engine, interval);
+      time += interval;
+    }
+    return {trajectories, duration: time};
   }
 }
 
 function areAnyMoving(bodies) {
   return bodies.some((body) => body.speed > 0.1);
-}
-
-function calculateTrajectories(engine, bodies) {
-  const trajectories = [];
-  for (let i=0; i < bodies.length; i++) {
-    trajectories[i] = [];
-  }
-  const interval = 1/10 * 1000;
-  let time = 0.0;
-  while (areAnyMoving(bodies)) {
-    bodies.forEach((body, i) => {
-      trajectories[i].push([time, body.position.x, body.position.y]);
-    });
-    Engine.update(engine, interval);
-    time += interval;
-  }
-  return trajectories;
 }
 
 async function setupGame() {
@@ -57,10 +52,12 @@ async function setupGame() {
       .fill('red');
     app.stage.addChild(circle);
 
+    const aimLine = new PIXI.Graphics();
+    app.stage.addChild(aimLine);
     const data = {
-      aimLine: new PIXI.Graphics(),
+      circle,
+      aimLine,
     };
-    app.stage.addChild(data.aimLine);
     marbleData.push(data);
   }
 
@@ -93,6 +90,8 @@ async function setupGame() {
     }
 
     for (const [id, m] of marbleData.entries()) {
+      // m.circle.position.x = ;
+      // m.circle.position.y = ;
     }
 
     if (hovering !== undefined || dragging !== undefined) {
@@ -118,6 +117,12 @@ async function setupGame() {
     const pos = new Vec2(e.offsetX, e.offsetY);
     mousePos = pos;
     process('mousemove');
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' ') {
+      e.preventDefault();
+    }
+    process('keydown', [e]);
   });
 
   app.ticker.add((ticker) => {
