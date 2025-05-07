@@ -2,18 +2,27 @@ import * as PIXI from 'https://cdn.jsdelivr.net/npm/pixi.js@8.8.0/dist/pixi.mjs'
 import {Vec2} from 'gl-matrix/vec2'
 import {Body, Bodies, Composite, Engine} from 'matter-js';
 
+const op = {};
+const datum = {};
+
 // Server. Communicate by methods only to sim server
 class GameServer {
   constructor() {
-    this.marblePositions = [new Vec2(100, 100), new Vec2(100, 200)];
+    this.marblePositions = [[100, 100], [100, 200]];
     this.engine = Engine.create();
     this.engine.gravity.scale = 0;
     this.marbleBodies = this.marblePositions.map((pos) => {
-      const body = Bodies.circle(pos.x, pos.y, 20);
+      const body = Bodies.circle(...pos, 20);
       body.frictionAir = 0.02;
       Composite.add(this.engine.world, [body]);
       return body;
     });
+  }
+  call() {
+    return [
+      [true, this.marblePositions[0]],
+      [true, this.marblePositions[1]],
+    ]
   }
   submitVelocities(vels) {
     vels.forEach((vel, i) => {
@@ -45,8 +54,16 @@ async function setupGame() {
   const app = new PIXI.Application();
   await app.init({ width: 1280, height: 720 });
 
+  const setupResponse = server.call([
+    [op.GET, datum.MARBLE_POSITION, 0],
+    [op.GET, datum.MARBLE_POSITION, 1],
+  ]);
+  console.assert(setupResponse[0][0]);
+  console.assert(setupResponse[0][1]);
+  const positions = setupResponse.map(r => new Vec2(r[1]));
+
   let marbleData = [];
-  for (const [i, pos] of server.marblePositions.entries()) {
+  for (const [i, pos] of positions.entries()) {
     const circle = new PIXI.Graphics()
       .circle(pos.x, pos.y, 20)
       .fill('red');
@@ -66,7 +83,7 @@ async function setupGame() {
 
   let t = 0;
   function process(eType) {
-    let hovering = server.marblePositions.findIndex(pos => Vec2.clone(mousePos).dist(pos) < 20);
+    let hovering = positions.findIndex(pos => Vec2.clone(mousePos).dist(pos) < 20);
     if (hovering === -1) {
       hovering = undefined;
     }
@@ -79,7 +96,7 @@ async function setupGame() {
       dragging = undefined;
     } else if (eType === 'mousemove') {
       if (dragging !== undefined) {
-        const start = server.marblePositions[dragging];
+        const start = positions[dragging];
         const end = mousePos;
         marbleData[dragging].aimLine
           .clear()
@@ -125,8 +142,8 @@ async function setupGame() {
     process('keydown', [e]);
   });
 
-  app.ticker.add((ticker) => {
-  });
+  // app.ticker.add((ticker) => {
+  // });
 
   document.body.appendChild(app.canvas);
 }
