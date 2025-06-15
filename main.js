@@ -55,6 +55,9 @@ async function setupGame() {
   await app.init({ width: 1280, height: 720 });
 
   let mousePos;
+
+  let mouseDown = false;
+  let mouseDownChange;
   let dragging;
   let marbleData = [];
 
@@ -63,23 +66,20 @@ async function setupGame() {
     if (hovering === -1) {
       hovering = undefined;
     }
-    let newAimLine = false;
-    if (eType === 'mousedown') {
-      if (hovering !== undefined) {
-        dragging = hovering;
-      }
-    } else if (eType === 'mouseup') {
+    if (mouseDownChange && mouseDown && hovering) {
+      dragging = hovering;
+    } else if (!mouseDown) {
       dragging = undefined;
-    } else if (eType === 'mousemove') {
-      if (dragging !== undefined) {
-        const start = marbleData[dragging].position;
-        const end = mousePos;
-        marbleData[dragging].aimLine
-          .clear()
-          .moveTo(start.x, start.y)
-          .lineTo(end.x, end.y)
-          .stroke({width: 5, color: 'green'});
-      }
+    }
+    if (dragging !== undefined) {
+      const start = marbleData[dragging].position;
+      const end = mousePos;
+      marbleData[dragging].aimLine
+        .clear()
+        .moveTo(start.x, start.y)
+        .lineTo(end.x, end.y)
+        .stroke({width: 5, color: 'green'});
+    }
     } else if (eType === 'serverMessage') {
       const marbleID = eData[0];
       const pos = new Vec2(eData[1]);
