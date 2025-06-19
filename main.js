@@ -58,54 +58,46 @@ async function setupGame() {
 
   let mouseDown = false;
   let mouseDownChange;
-  let dragging;
+  let marbleBeingDragged;
   let marbleData = [];
 
-  function process(eType, eData) {
-    let hovering = mousePos ? marbleData.findIndex(m => mousePos.dist(m.position) < 20) : undefined;
-    if (hovering === -1) {
-      hovering = undefined;
+  function process({mouseDownChange}) {
+    let marbleBeingHovered = mousePos ? marbleData.findIndex(m => mousePos.dist(m.position) < 20) : undefined;
+    if (marbleBeingHovered === -1) {
+      marbleBeingHovered = undefined;
     }
-    if (mouseDownChange && mouseDown && hovering) {
-      dragging = hovering;
+    if (mouseDownChange && mouseDown && marbleBeingHovered) {
+      marbleBeingDragged = marbleBeingHovered;
     } else if (!mouseDown) {
-      dragging = undefined;
+      marbleBeingDragged = undefined;
     }
-    if (dragging !== undefined) {
-      const start = marbleData[dragging].position;
+    for (const [i, marblePosition] of serverData[datum.marblePosition]) {
+      if (!marbleData[i]) {
+        const circle = new PIXI.Graphics()
+          .circle(marblePosition.x, marblePosition.y, 20)
+          .fill('red');
+        app.stage.addChild(circle);
+        const aimLine = new PIXI.Graphics();
+        app.stage.addChild(aimLine);
+        marbleData[i] = {
+          circle,
+          aimLine,
+        };
+      }
+      marbleData[i].circle.position.x = marblePosition.x;
+      marbleData[i].circle.position.y = marblePosition.y;
+    }
+    if (marbleBeingDragged !== undefined) {
+      const start = marbleData[marbleBeingDragged].position;
       const end = mousePos;
-      marbleData[dragging].aimLine
+      marbleData[marbleBeingDragged].aimLine
         .clear()
         .moveTo(start.x, start.y)
         .lineTo(end.x, end.y)
         .stroke({width: 5, color: 'green'});
     }
-    } else if (eType === 'serverMessage') {
-      const marbleID = eData[0];
-      const pos = new Vec2(eData[1]);
-      if (marbleData[marbleID]) {
-        marbleData[marbleID].position = pos;
-      } else {
-        const circle = new PIXI.Graphics()
-          .circle(pos.x, pos.y, 20)
-          .fill('red');
-        app.stage.addChild(circle);
-        const aimLine = new PIXI.Graphics();
-        app.stage.addChild(aimLine);
-        marbleData[marbleID] = {
-          position: pos,
-          circle,
-          aimLine,
-        };
-      }
-    }
 
-    for (const [id, m] of marbleData.entries()) {
-      // m.circle.position.x = ;
-      // m.circle.position.y = ;
-    }
-
-    if (hovering !== undefined || dragging !== undefined) {
+    if (marbleBeingHovered !== undefined || marbleBeingDragged !== undefined) {
       app.canvas.style.cursor = 'pointer';
     } else {
       app.canvas.style.cursor = 'default';
@@ -115,12 +107,12 @@ async function setupGame() {
   app.canvas.addEventListener('mouseup', (e) => {
     const pos = new Vec2(e.offsetX, e.offsetY);
     mousePos = pos;
-    process('mouseup');
+    process({mouseDownChange: true});
   });
   app.canvas.addEventListener('mousedown', (e) => {
     const pos = new Vec2(e.offsetX, e.offsetY);
     mousePos = pos;
-    process('mousedown');
+    process({mouseDownChange: true});
   });
   app.canvas.addEventListener('mousemove', (e) => {
     const pos = new Vec2(e.offsetX, e.offsetY);
